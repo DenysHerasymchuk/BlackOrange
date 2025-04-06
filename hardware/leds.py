@@ -1,7 +1,8 @@
 import wiringpi
 import time
+import logging
+from utils.mqtt_client import mqtt_client
 from hardware.sensors import sensor_controller
-from utils.thingspeak import update_thingspeak
 
 # Pin definitions
 R_PIN = 14
@@ -9,102 +10,97 @@ G_PIN = 15
 B_PIN = 16
 LED_PINS = [3, 4, 6]
 
+logger = logging.getLogger(__name__)
+
 def setup_leds():
-    wiringpi.wiringPiSetup()
-    wiringpi.softPwmCreate(R_PIN, 0, 255)
-    wiringpi.softPwmCreate(G_PIN, 0, 255)
-    wiringpi.softPwmCreate(B_PIN, 0, 255)
-    for pin in LED_PINS:
-        wiringpi.pinMode(pin, wiringpi.OUTPUT)
-        wiringpi.digitalWrite(pin, wiringpi.LOW)
+    """Initialize all LED hardware components"""
+    try:
+        wiringpi.wiringPiSetup()
+        wiringpi.softPwmCreate(R_PIN, 0, 255)
+        wiringpi.softPwmCreate(G_PIN, 0, 255)
+        wiringpi.softPwmCreate(B_PIN, 0, 255)
+        for pin in LED_PINS:
+            wiringpi.pinMode(pin, wiringpi.OUTPUT)
+            wiringpi.digitalWrite(pin, wiringpi.LOW)
+        logger.info("✅ LEDs initialized successfully")
+        return True
+    except Exception as e:
+        logger.error(f"❌ LED setup failed: {e}")
+        return False
 
 def set_color(r, g, b):
-    wiringpi.softPwmWrite(R_PIN, r)
-    wiringpi.softPwmWrite(G_PIN, g)
-    wiringpi.softPwmWrite(B_PIN, b)
-    sensor_data = sensor_controller.read_sensors()
-    update_thingspeak(
-        field1=int(r > 0 or g > 0 or b > 0),
-        field2=sensor_data['light'],
-        field3=sensor_data['temperature'],
-        field4=sensor_data['pressure']
-    )
+    """Set RGB LED color"""
+    try:
+        wiringpi.softPwmWrite(R_PIN, r)
+        wiringpi.softPwmWrite(G_PIN, g)
+        wiringpi.softPwmWrite(B_PIN, b)
+        return True
+    except Exception as e:
+        logger.error(f"🎨 LED color set failed: {e}")
+        return False
+
+def set_rgb_state(state):
+    """Set RGB LED state (2 for green/win, 1 for yellow/tie, 0 for red/lost)"""
+    try:
+        if state == 2:  # Green/win
+            set_color(0, 255, 0)
+        elif state == 1:  # Yellow/tie
+            set_color(255, 255, 0)
+        else:  # Red/lost (state == 0)
+            set_color(255, 0, 0)
+        
+        sensor_data = sensor_controller.get_sensor_readings() if sensor_controller else None
+        
+        if mqtt_client and mqtt_client.connected:
+            mqtt_client.update_device_state(
+                temperature=sensor_data.get('temperature') if sensor_data else None,
+                light=sensor_data.get('light') if sensor_data else None
+            )
+        
+        return True
+    except Exception as e:
+        logger.error(f"🎨 LED state set failed: {e}")
+        return False
+
+def set_three_led_state(active):
+    """Set 3-LED state (1 when active, 0 otherwise)"""
+    try:
+        for pin in LED_PINS:
+            wiringpi.digitalWrite(pin, wiringpi.HIGH if active else wiringpi.LOW)
+        
+        sensor_data = sensor_controller.get_sensor_readings() if sensor_controller else None
+        
+        if mqtt_client and mqtt_client.connected:
+            mqtt_client.update_device_state(
+                temperature=sensor_data.get('temperature') if sensor_data else None,
+                light=sensor_data.get('light') if sensor_data else None
+            )
+        
+        return True
+    except Exception as e:
+        logger.error(f"💡 3-LED state set failed: {e}")
+        return False
 
 def run_led_chaser():
-    for pin in LED_PINS:
-        wiringpi.digitalWrite(pin, wiringpi.LOW)
-    
-    sensor_data = sensor_controller.read_sensors()
-    update_thingspeak(field1=0, field2=sensor_data['light'], 
-                     field3=sensor_data['temperature'], field4=sensor_data['pressure'])
-    
-    for pin in LED_PINS:
-        wiringpi.digitalWrite(pin, wiringpi.HIGH)
-        update_thingspeak(field1=1, field2=sensor_data['light'],
-                         field3=sensor_data['temperature'], field4=sensor_data['pressure'])
-        time.sleep(0.1)
-        wiringpi.digitalWrite(pin, wiringpi.LOW)
-        update_thingspeak(field1=0, field2=sensor_data['light'],
-                         field3=sensor_data['temperature'], field4=sensor_data['pressure'])
-    
-    for pin in LED_PINS:
-        wiringpi.digitalWrite(pin, wiringpi.HIGH)
-    update_thingspeak(field1=1, field2=sensor_data['light'],
-                     field3=sensor_data['temperature'], field4=sensor_data['pressure'])
-    time.sleep(0.1)
-    
-    for pin in LED_PINS:
-        wiringpi.digitalWrite(pin, wiringpi.LOW)
-    update_thingspeak(field1=0, field2=sensor_data['light'],
-                     field3=sensor_data['temperature'], field4=sensor_data['pressure'])
-
-def fancy_led_pattern():
-    for pin in LED_PINS:
-        wiringpi.digitalWrite(pin, wiringpi.LOW)
-    
-    for _ in range(2):
+    """Run LED chaser pattern"""
+    try:
         for pin in LED_PINS:
             wiringpi.digitalWrite(pin, wiringpi.HIGH)
             time.sleep(0.1)
             wiringpi.digitalWrite(pin, wiringpi.LOW)
-        
-        for pin in reversed(LED_PINS):
-            wiringpi.digitalWrite(pin, wiringpi.HIGH)
-            time.sleep(0.1)
-            wiringpi.digitalWrite(pin, wiringpi.LOW)
-    
-    for pin in LED_PINS:
-        wiringpi.digitalWrite(pin, wiringpi.HIGH)
-    time.sleep(0.2)
-    for pin in LED_PINS:
-        wiringpi.digitalWrite(pin, wiringpi.LOW)
-
-def victory_light_show():
-    colors = [
-        (255, 0, 0),    # Red
-        (0, 255, 0),    # Green
-        (0, 0, 255),    # Blue
-        (255, 255, 0),  # Yellow
-        (0, 255, 255),  # Cyan
-        (255, 0, 255)   # Magenta
-    ]
-    
-    run_led_chaser()
-    
-    for _ in range(6):
-        for r, g, b in colors:
-            set_color(r, g, b)
-            time.sleep(0.2)
-            
-            for i, pin in enumerate(LED_PINS):
-                wiringpi.digitalWrite(pin, wiringpi.HIGH)
-                time.sleep(0.1)
-                if i > 0:
-                    wiringpi.digitalWrite(LED_PINS[i-1], wiringpi.LOW)
-            
-            wiringpi.digitalWrite(LED_PINS[-1], wiringpi.LOW)
+        return True
+    except Exception as e:
+        logger.error(f"🏃 LED chaser failed: {e}")
+        return False
 
 def cleanup_leds():
-    set_color(0, 0, 0)
-    for pin in LED_PINS:
-        wiringpi.digitalWrite(pin, wiringpi.LOW)
+    """Turn off all LEDs and clean up resources"""
+    try:
+        set_color(0, 0, 0)
+        for pin in LED_PINS:
+            wiringpi.digitalWrite(pin, wiringpi.LOW)
+        logger.info("✅ LEDs cleaned up successfully")
+        return True
+    except Exception as e:
+        logger.error(f"🧹 LED cleanup failed: {e}")
+        return False

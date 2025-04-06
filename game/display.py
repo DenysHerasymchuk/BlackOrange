@@ -1,7 +1,7 @@
 from rich.console import Console
 from rich.panel import Panel
 from game.constants import SUITS
-from hardware.sensors import sensor_controller  # Add this import
+from hardware.sensors import sensor_controller
 
 console = Console()
 
@@ -37,10 +37,9 @@ def display_game_state(level, dealer_hand, player_hand, hide_dealer_card):
     console.print(Panel("Your Hand", style="bold blue", expand=False), justify="center")
 
     # Display sensor data
-    sensor_data = sensor_controller.read_sensors()
+    sensor_data = sensor_controller.get_sensor_readings()
     console.print(
         f"Temperature: {sensor_data['temperature']:.1f}°C | "
-        f"Light: {sensor_data['light']} lux | "
-        f"Pressure: {sensor_data['pressure']:.1f} hPa",
+        f"Light: {sensor_data['light']} lux",
         justify="center"
     )

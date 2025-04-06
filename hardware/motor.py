@@ -33,6 +33,22 @@ def dealer_bust_celebration():
     time.sleep(0.5)
     rotate_motor(100, 0.003)
 
+def motor_win_celebration():
+    for _ in range(2):
+        rotate_motor(50, 0.002)
+        rotate_motor(-50, 0.002)
+    dealer_bust_celebration()
+
+def motor_short_buzz():
+    rotate_motor(20, 0.003)
+    rotate_motor(-20, 0.003)
+
+def motor_shuffle_effect():
+    for _ in range(3):
+        rotate_motor(30, 0.004)
+        rotate_motor(-30, 0.004)
+        time.sleep(0.1)
+
 def cleanup_motor():
     for pin in MOTOR_PINS:
         wiringpi.digitalWrite(pin, wiringpi.LOW)
